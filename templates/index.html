@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deepfake Image Detection</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#172d43;font-family:Arial,sans-serif}header,main,footer{max-width:1080px;margin:auto}header{padding:28px 24px;display:flex;justify-content:space-between;align-items:center}.brand{font-weight:800;font-size:20px}.tag{font-size:12px;border:1px solid #c8d6df;border-radius:30px;padding:8px 12px}main{padding:0 24px}.hero{background:linear-gradient(120deg,#10243a,#145d6a);color:white;border-radius:24px;padding:42px;margin:10px 0 28px}.eyebrow{font-size:12px;letter-spacing:2px;color:#8de1de;font-weight:700}h1{font-size:clamp(30px,5vw,46px);letter-spacing:-1.5px;margin:16px 0}.hero p{color:#d5e5ed;line-height:1.6;margin:0}.grid{display:grid;grid-template-columns:1.1fr 1fr;gap:24px}.card{background:white;border:1px solid #e0e7ee;border-radius:20px;padding:28px}h2{font-size:19px;margin:0 0 12px}.muted{color:#63778a;line-height:1.6;font-size:14px}.upload{padding:24px;background:#f8fbfd;border:2px dashed #bdcfdc;border-radius:14px;display:block;margin:22px 0;line-height:1.6}input{display:block;margin-top:14px;width:100%;font-size:14px}input::file-selector-button{padding:9px;border:0;border-radius:6px;background:#dfeef2;color:#174b58;cursor:pointer}#preview{display:block;max-width:100%;max-height:300px;margin:16px auto;border-radius:12px;object-fit:contain}button{width:100%;padding:15px;border:0;border-radius:10px;background:#126a78;color:white;font-size:16px;font-weight:700;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}#result{margin-top:24px;padding-top:24px;border-top:1px solid #e1e8ef}.badge{padding:10px 12px;border-radius:8px;font-size:14px;font-weight:bold;display:inline-block}.real{background:#e2f6ed;color:#136746}.fake{background:#fff0e7;color:#994618}.score{font-size:44px;font-weight:800;margin:16px 0 0}progress{width:100%;height:14px;accent-color:#167888}.scores{display:flex;justify-content:space-between;font-size:14px;margin:16px 0}.error{color:#a12e2e;background:#fff0f0;padding:12px;border-radius:8px}footer{padding:28px 24px;font-size:12px;color:#63778a}[hidden]{display:none!important}@media(max-width:700px){.grid{grid-template-columns:1fr}.hero{padding:28px}.card{padding:22px}.tag{display:none}}
+</style>
+</head>
+<body>
+<header><div class="brand">◈ Deepfake Detector</div><span class="tag">AI image analysis</span></header>
+<main>
+<section class="hero"><div class="eyebrow">LOOK BEYOND THE PIXELS</div><h1>Real face or AI-generated?</h1><p>Take a closer look. Upload a face image and let the model analyze it.</p></section>
+<div class="grid">
+<section class="card"><h2>01 / Upload an image</h2><p class="muted">Choose a clear face image to get started.</p>
+<form id="uploadForm"><label class="upload" for="image">Select your image<br><small>JPG or PNG · Up to 10 MB</small><input id="image" type="file" accept="image/jpeg,image/png" required></label><img id="preview" alt="Selected image preview" hidden><p id="fileInfo" class="muted"></p><button id="analyze" type="submit" disabled>Analyze Image</button></form>
+</section>
+<section class="card"><h2>02 / Analysis result</h2><p id="status" class="muted" role="status" aria-live="polite">Your result will appear here after you analyze an image.</p><p id="error" class="error" role="alert" hidden></p>
+<div id="result" hidden><span id="label" class="badge"></span><div id="confidence" class="score"></div><p class="muted">Predicted class score</p><progress id="bar" max="1" value="0" aria-label="Predicted class score"></progress><div class="scores"><span id="realScore"></span><span id="fakeScore"></span></div><p class="muted">This is a model prediction, not proof of authenticity.</p></div>
+</section></div>
+</main><footer>Deepfake Image Detection · Educational project · Images are processed in memory and are not saved by this app.</footer>
+<script>
+const input=document.getElementById('image'),button=document.getElementById('analyze'),preview=document.getElementById('preview'),result=document.getElementById('result'),errorBox=document.getElementById('error'),statusText=document.getElementById('status');
+let previewUrl=null;
+input.addEventListener('change',()=>{
+ result.hidden=true;errorBox.hidden=true;button.disabled=true;preview.hidden=true;
+ document.getElementById('fileInfo').textContent='';
+ if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=null;}
+ const file=input.files[0];statusText.textContent='Your result will appear here after you analyze an image.';
+ if(!file)return;
+ if(!['image/jpeg','image/png'].includes(file.type)||file.size>10*1024*1024){errorBox.textContent='Choose a JPG or PNG image smaller than 10 MB.';errorBox.hidden=false;return;}
+ preview.onload=()=>{preview.hidden=false;button.disabled=false;};
+ preview.onerror=()=>{errorBox.textContent='This image could not be opened.';errorBox.hidden=false;button.disabled=true;};
+ previewUrl=URL.createObjectURL(file);preview.src=previewUrl;
+ document.getElementById('fileInfo').textContent=file.name;
+});
+document.getElementById('uploadForm').addEventListener('submit',async(event)=>{
+ event.preventDefault();if(!input.files[0])return;
+ button.disabled=true;input.disabled=true;button.textContent='Analyzing…';result.hidden=true;errorBox.hidden=true;
+ statusText.textContent='Analyzing your image. The first analysis may take longer while the model loads.';
+ const data=new FormData();data.append('image',input.files[0]);
+ try{
+  const response=await fetch('/predict',{method:'POST',body:data});
+  const output=await response.json();if(!response.ok)throw new Error(output.error||'Analysis failed.');
+  document.getElementById('label').textContent=output.label;
+  document.getElementById('label').className='badge '+(output.is_real?'real':'fake');
+  document.getElementById('confidence').textContent=(output.class_score*100).toFixed(2)+'%';
+  document.getElementById('bar').value=output.class_score;
+  document.getElementById('realScore').textContent='Real: '+(output.real_score*100).toFixed(2)+'%';
+  document.getElementById('fakeScore').textContent='Fake: '+(output.fake_score*100).toFixed(2)+'%';
+  result.hidden=false;statusText.textContent='Analysis complete.';
+ }catch(error){errorBox.textContent=error.message||'Cannot connect to the server.';errorBox.hidden=false;statusText.textContent='Please try again.';}
+ finally{button.disabled=false;input.disabled=false;button.textContent='Analyze Image';}
+});
+</script>
+</body></html>
